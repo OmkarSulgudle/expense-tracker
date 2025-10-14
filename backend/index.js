@@ -13,31 +13,62 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// Create table if not exists
+// Create table if it doesn't exist
 pool.query(`
   CREATE TABLE IF NOT EXISTS expenses (
     id SERIAL PRIMARY KEY,
-    title TEXT,
-    amount NUMERIC,
+    title TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
     category TEXT,
-    date DATE
+    date DATE NOT NULL
   )
-`);
+`)
+.then(() => console.log('✅ Table "expenses" is ready'))
+.catch((err) => console.error('❌ Error creating table:', err));
 
-// Routes
+// Root route
+app.get('/', (req, res) => {
+  res.send('✅ Expense Tracker Backend is running!');
+});
+
+// Get all expenses
 app.get('/expenses', async (req, res) => {
-  const result = await pool.query('SELECT * FROM expenses ORDER BY date DESC');
-  res.json(result.rows);
+  try {
+    const result = await pool.query('SELECT * FROM expenses ORDER BY date DESC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Error fetching expenses:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
 
+// Add a new expense
 app.post('/expenses', async (req, res) => {
-  const { title, amount, category, date } = req.body;
-  await pool.query(
-    'INSERT INTO expenses (title, amount, category, date) VALUES ($1, $2, $3, $4)',
-    [title, amount, category, date]
-  );
-  res.json({ message: 'Expense added' });
+  try {
+    const { title, amount, category, date } = req.body;
+    await pool.query(
+      'INSERT INTO expenses (title, amount, category, date) VALUES ($1, $2, $3, $4)',
+      [title, amount, category, date]
+    );
+    res.json({ message: 'Expense added' });
+  } catch (err) {
+    console.error('❌ Error adding expense:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
 
+// Delete an expense (optional)
+app.delete('/expenses/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await pool.query('DELETE FROM expenses WHERE id = $1', [id]);
+    res.json({ message: 'Expense deleted' });
+  } catch (err) {
+    console.error('❌ Error deleting expense:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
