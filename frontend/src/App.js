@@ -38,15 +38,29 @@ export default function App() {
     try {
       setLoading(true);
       if (editingExpense) {
-        await axios.put(`${API_URL}/expenses/${editingExpense.id}`, form);
+        // Update existing expense
+        const response = await axios.put(`${API_URL}/expenses/${editingExpense.id}`, form);
+        setExpenses(prevExpenses => 
+          prevExpenses.map(exp => 
+            exp.id === editingExpense.id ? response.data.expense : exp
+          )
+        );
         setEditingExpense(null);
       } else {
-        await axios.post(`${API_URL}/expenses`, form);
+        // Add new expense
+        const response = await axios.post(`${API_URL}/expenses`, form);
+        // Use the expense returned from the backend for immediate UI update
+        if (response.data.expense) {
+          setExpenses(prevExpenses => [response.data.expense, ...prevExpenses]);
+        }
       }
       setForm({ title: '', amount: '', category: 'food', date: new Date().toISOString().split('T')[0] });
-      await fetchExpenses();
     } catch (error) {
       console.error('Error saving expense:', error);
+      // If error occurs, refresh from server to ensure consistency
+      fetchExpenses();
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -64,9 +78,12 @@ export default function App() {
     if (window.confirm('Are you sure you want to delete this expense?')) {
       try {
         await axios.delete(`${API_URL}/expenses/${id}`);
-        await fetchExpenses();
+        // Update local state immediately instead of fetching from server
+        setExpenses(prevExpenses => prevExpenses.filter(expense => expense.id !== id));
       } catch (error) {
         console.error('Error deleting expense:', error);
+        // If error occurs, refresh from server to ensure consistency
+        fetchExpenses();
       }
     }
   };
@@ -127,8 +144,7 @@ export default function App() {
     <div className="app">
       <div className="container">
         <div className="header">
-          <h1>💰 Expense Tracker</h1>
-          <p>Track your spending and manage your finances efficiently</p>
+          <h1>Expense Tracker</h1>
         </div>
 
         <div className="main-content">
