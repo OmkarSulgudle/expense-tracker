@@ -57,7 +57,26 @@ app.post('/expenses', async (req, res) => {
   }
 });
 
-// Delete an expense (optional)
+// Update an expense
+app.put('/expenses/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { title, amount, category, date } = req.body;
+    const result = await pool.query(
+      'UPDATE expenses SET title = $1, amount = $2, category = $3, date = $4 WHERE id = $5 RETURNING *',
+      [title, amount, category, date, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Expense not found' });
+    }
+    res.json({ message: 'Expense updated', expense: result.rows[0] });
+  } catch (err) {
+    console.error('❌ Error updating expense:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Delete an expense
 app.delete('/expenses/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
