@@ -40,6 +40,7 @@ export default function App() {
       if (editingExpense) {
         // Update existing expense
         const response = await axios.put(`${API_URL}/expenses/${editingExpense.id}`, form);
+        console.log('Update response:', response.data);
         setExpenses(prevExpenses => 
           prevExpenses.map(exp => 
             exp.id === editingExpense.id ? response.data.expense : exp
@@ -49,14 +50,27 @@ export default function App() {
       } else {
         // Add new expense
         const response = await axios.post(`${API_URL}/expenses`, form);
+        console.log('Add response:', response.data);
+        
         // Use the expense returned from the backend for immediate UI update
-        if (response.data.expense) {
-          setExpenses(prevExpenses => [response.data.expense, ...prevExpenses]);
+        if (response.data && response.data.expense) {
+          // Ensure amount is properly converted to string/number for display
+          const newExpense = {
+            ...response.data.expense,
+            amount: response.data.expense.amount ? String(response.data.expense.amount) : form.amount
+          };
+          console.log('Adding new expense:', newExpense);
+          setExpenses(prevExpenses => [newExpense, ...prevExpenses]);
+        } else {
+          // Fallback: refresh from server if response structure is unexpected
+          console.log('Unexpected response structure, fetching from server');
+          setTimeout(() => fetchExpenses(), 100);
         }
       }
       setForm({ title: '', amount: '', category: 'food', date: new Date().toISOString().split('T')[0] });
     } catch (error) {
       console.error('Error saving expense:', error);
+      console.error('Error details:', error.response?.data || error.message);
       // If error occurs, refresh from server to ensure consistency
       fetchExpenses();
     } finally {
@@ -104,6 +118,20 @@ export default function App() {
     const matchesEndDate = !filters.endDate || new Date(expense.date) <= new Date(filters.endDate);
     return matchesCategory && matchesStartDate && matchesEndDate;
   });
+
+  // Debug: Log expenses whenever they change
+  useEffect(() => {
+    console.log('Expenses updated:', expenses.length, 'items');
+    console.log('Expenses:', expenses);
+    const currentFiltered = expenses.filter(expense => {
+      const matchesCategory = !filters.category || expense.category === filters.category;
+      const matchesStartDate = !filters.startDate || new Date(expense.date) >= new Date(filters.startDate);
+      const matchesEndDate = !filters.endDate || new Date(expense.date) <= new Date(filters.endDate);
+      return matchesCategory && matchesStartDate && matchesEndDate;
+    });
+    console.log('Filtered expenses:', currentFiltered.length, 'items');
+    console.log('Filters:', filters);
+  }, [expenses, filters]);
 
   // Calculate statistics
   const totalExpenses = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount || 0), 0);

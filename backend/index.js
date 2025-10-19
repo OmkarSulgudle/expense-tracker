@@ -46,10 +46,14 @@ app.get('/expenses', async (req, res) => {
 app.post('/expenses', async (req, res) => {
   try {
     const { title, amount, category, date } = req.body;
+    console.log('📝 Adding expense:', { title, amount, category, date });
+    
     const result = await pool.query(
       'INSERT INTO expenses (title, amount, category, date) VALUES ($1, $2, $3, $4) RETURNING *',
       [title, amount, category, date]
     );
+    
+    console.log('✅ Expense added successfully:', result.rows[0]);
     res.json({ message: 'Expense added', expense: result.rows[0] });
   } catch (err) {
     console.error('❌ Error adding expense:', err);
