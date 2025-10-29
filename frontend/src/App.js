@@ -16,6 +16,7 @@ const CATEGORIES = [
 
 export default function App() {
   const [expenses, setExpenses] = useState([]);
+  const [displayExpenses, setDisplayExpenses] = useState([]);
   const [form, setForm] = useState({ title: '', amount: '', category: 'food', date: new Date().toISOString().split('T')[0] });
   const [editingExpense, setEditingExpense] = useState(null);
   const [filters, setFilters] = useState({ category: '', startDate: '', endDate: '' });
@@ -28,8 +29,28 @@ export default function App() {
       setLoading(true);
       const res = await axios.get(`${API_URL}/expenses`);
       setExpenses(res.data);
+      // If no active filters, show the full list
+      if (!filters.category && !filters.startDate && !filters.endDate) {
+        setDisplayExpenses(res.data);
+      }
     } catch (error) {
       console.error('Error fetching expenses:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchExpensesWithFilters = async (appliedFilters) => {
+    try {
+      setLoading(true);
+      const params = {};
+      if (appliedFilters.category) params.category = appliedFilters.category;
+      if (appliedFilters.startDate) params.startDate = appliedFilters.startDate;
+      if (appliedFilters.endDate) params.endDate = appliedFilters.endDate;
+      const res = await axios.get(`${API_URL}/expenses`, { params });
+      setDisplayExpenses(res.data);
+    } catch (error) {
+      console.error('Error fetching filtered expenses:', error);
     } finally {
       setLoading(false);
     }
@@ -43,30 +64,22 @@ export default function App() {
         // Update existing expense
         const response = await axios.put(`${API_URL}/expenses/${editingExpense.id}`, form);
         console.log('Update response:', response.data);
-        setExpenses(prevExpenses => 
-          prevExpenses.map(exp => 
-            exp.id === editingExpense.id ? response.data.expense : exp
-          )
-        );
+        // Refresh from server to reflect filters accurately
+        await fetchExpenses();
+        const hasActiveFilters = filters.category || filters.startDate || filters.endDate;
+        if (hasActiveFilters) {
+          await fetchExpensesWithFilters(filters);
+        }
         setEditingExpense(null);
       } else {
         // Add new expense
         const response = await axios.post(`${API_URL}/expenses`, form);
         console.log('Add response:', response.data);
-        
-        // Use the expense returned from the backend for immediate UI update
-        if (response.data && response.data.expense) {
-          // Ensure amount is properly converted to string/number for display
-          const newExpense = {
-            ...response.data.expense,
-            amount: response.data.expense.amount ? String(response.data.expense.amount) : form.amount
-          };
-          console.log('Adding new expense:', newExpense);
-          setExpenses(prevExpenses => [newExpense, ...prevExpenses]);
-        } else {
-          // Fallback: refresh from server if response structure is unexpected
-          console.log('Unexpected response structure, fetching from server');
-          setTimeout(() => fetchExpenses(), 100);
+        // Refresh lists from server (respects current filters)
+        await fetchExpenses();
+        const hasActiveFilters = filters.category || filters.startDate || filters.endDate;
+        if (hasActiveFilters) {
+          await fetchExpensesWithFilters(filters);
         }
       }
       setForm({ title: '', amount: '', category: 'food', date: new Date().toISOString().split('T')[0] });
@@ -94,8 +107,11 @@ export default function App() {
     if (window.confirm('Are you sure you want to delete this expense?')) {
       try {
         await axios.delete(`${API_URL}/expenses/${id}`);
-        // Update local state immediately instead of fetching from server
-        setExpenses(prevExpenses => prevExpenses.filter(expense => expense.id !== id));
+        await fetchExpenses();
+        const hasActiveFilters = filters.category || filters.startDate || filters.endDate;
+        if (hasActiveFilters) {
+          await fetchExpensesWithFilters(filters);
+        }
       } catch (error) {
         console.error('Error deleting expense:', error);
         // If error occurs, refresh from server to ensure consistency
@@ -113,33 +129,16 @@ export default function App() {
     fetchExpenses(); 
   }, []);
 
-  // Filter expenses based on filters (normalize to local day to avoid timezone issues)
-  const filteredExpenses = expenses.filter(expense => {
-    const matchesCategory = !filters.category || expense.category === filters.category;
-    const expenseDate = toLocalMidnight(expense.date);
-    const start = parseDateInputToStart(filters.startDate);
-    const end = parseDateInputToEnd(filters.endDate);
-    const matchesStartDate = !start || expenseDate >= start;
-    const matchesEndDate = !end || expenseDate <= end;
-    return matchesCategory && matchesStartDate && matchesEndDate;
-  });
+  // The list to render comes from the server based on applied filters
+  const filteredExpenses = displayExpenses;
 
   // Debug: Log expenses whenever they change
   useEffect(() => {
     console.log('Expenses updated:', expenses.length, 'items');
     console.log('Expenses:', expenses);
-    const currentFiltered = expenses.filter(expense => {
-      const matchesCategory = !filters.category || expense.category === filters.category;
-      const expenseDate = toLocalMidnight(expense.date);
-      const start = parseDateInputToStart(filters.startDate);
-      const end = parseDateInputToEnd(filters.endDate);
-      const matchesStartDate = !start || expenseDate >= start;
-      const matchesEndDate = !end || expenseDate <= end;
-      return matchesCategory && matchesStartDate && matchesEndDate;
-    });
-    console.log('Filtered expenses:', currentFiltered.length, 'items');
+    console.log('Filtered expenses (server):', filteredExpenses.length, 'items');
     console.log('Filters:', filters);
-  }, [expenses, filters]);
+  }, [expenses, filteredExpenses, filters]);
 
   // Calculate statistics
   const totalExpenses = expenses.reduce((sum, expense) => sum + parseFloat(expense.amount || 0), 0);
@@ -334,7 +333,7 @@ export default function App() {
                     <button
                       type="button"
                       className="btn"
-                      onClick={() => setFilters({ ...pendingFilters })}
+                      onClick={async () => { setFilters({ ...pendingFilters }); await fetchExpensesWithFilters(pendingFilters); }}
                     >
                       Search
                     </button>
@@ -342,7 +341,7 @@ export default function App() {
                       type="button"
                       className="btn btn-secondary"
                       style={{ marginLeft: '8px' }}
-                      onClick={() => { setPendingFilters({ category: '', startDate: '', endDate: '' }); setFilters({ category: '', startDate: '', endDate: '' }); }}
+                      onClick={async () => { setPendingFilters({ category: '', startDate: '', endDate: '' }); setFilters({ category: '', startDate: '', endDate: '' }); await fetchExpenses(); }}
                     >
                       Reset
                     </button>
