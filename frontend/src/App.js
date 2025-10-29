@@ -24,70 +24,76 @@ export default function App() {
   const [pendingFilters, setPendingFilters] = useState({ category: '', startDate: '', endDate: '' });
   const [loading, setLoading] = useState(false);
 
-  const fetchExpenses = async () => {
-    try {
-      setLoading(true);
-      const res = await axios.get(`${API_URL}/expenses`);
-      setExpenses(res.data);
-      // If no active filters, show the full list
-      if (!filters.category && !filters.startDate && !filters.endDate) {
-        setDisplayExpenses(res.data);
+  // Load expenses from localStorage on component mount
+  useEffect(() => {
+    const savedExpenses = localStorage.getItem('expenses');
+    if (savedExpenses) {
+      const parsedExpenses = JSON.parse(savedExpenses);
+      setExpenses(parsedExpenses);
+      setDisplayExpenses(parsedExpenses);
+    }
+  }, []);
+
+  // Save expenses to localStorage whenever expenses change
+  useEffect(() => {
+    localStorage.setItem('expenses', JSON.stringify(expenses));
+    // Update display when expenses change (if no filters applied)
+    if (!filters.category && !filters.startDate && !filters.endDate) {
+      setDisplayExpenses(expenses);
+    }
+  }, [expenses, filters]);
+
+  // Client-side filtering function
+  const filterExpenses = (expenseList, appliedFilters) => {
+    return expenseList.filter(expense => {
+      const matchesCategory = !appliedFilters.category || expense.category === appliedFilters.category;
+      
+      let matchesStartDate = true;
+      let matchesEndDate = true;
+      
+      if (appliedFilters.startDate) {
+        const expenseDate = toLocalMidnight(expense.date);
+        const startDate = parseDateInputToStart(appliedFilters.startDate);
+        matchesStartDate = expenseDate >= startDate;
       }
-    } catch (error) {
-      console.error('Error fetching expenses:', error);
-    } finally {
-      setLoading(false);
-    }
+      
+      if (appliedFilters.endDate) {
+        const expenseDate = toLocalMidnight(expense.date);
+        const endDate = parseDateInputToEnd(appliedFilters.endDate);
+        matchesEndDate = expenseDate <= endDate;
+      }
+      
+      return matchesCategory && matchesStartDate && matchesEndDate;
+    });
   };
 
-  const fetchExpensesWithFilters = async (appliedFilters) => {
-    try {
-      setLoading(true);
-      const params = {};
-      if (appliedFilters.category) params.category = appliedFilters.category;
-      if (appliedFilters.startDate) params.startDate = appliedFilters.startDate;
-      if (appliedFilters.endDate) params.endDate = appliedFilters.endDate;
-      const res = await axios.get(`${API_URL}/expenses`, { params });
-      setDisplayExpenses(res.data);
-    } catch (error) {
-      console.error('Error fetching filtered expenses:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addExpense = async (e) => {
+  const addExpense = (e) => {
     e.preventDefault();
     try {
       setLoading(true);
+      
       if (editingExpense) {
-        // Update existing expense
-        const response = await axios.put(`${API_URL}/expenses/${editingExpense.id}`, form);
-        console.log('Update response:', response.data);
-        // Refresh from server to reflect filters accurately
-        await fetchExpenses();
-        const hasActiveFilters = filters.category || filters.startDate || filters.endDate;
-        if (hasActiveFilters) {
-          await fetchExpensesWithFilters(filters);
-        }
+        // Update existing expense locally
+        const updatedExpenses = expenses.map(exp => 
+          exp.id === editingExpense.id 
+            ? { ...exp, ...form, id: editingExpense.id }
+            : exp
+        );
+        setExpenses(updatedExpenses);
         setEditingExpense(null);
       } else {
-        // Add new expense
-        const response = await axios.post(`${API_URL}/expenses`, form);
-        console.log('Add response:', response.data);
-        // Refresh lists from server (respects current filters)
-        await fetchExpenses();
-        const hasActiveFilters = filters.category || filters.startDate || filters.endDate;
-        if (hasActiveFilters) {
-          await fetchExpensesWithFilters(filters);
-        }
+        // Add new expense locally
+        const newExpense = {
+          id: Date.now(), // Simple ID generation
+          ...form,
+          amount: parseFloat(form.amount)
+        };
+        setExpenses(prevExpenses => [newExpense, ...prevExpenses]);
       }
+      
       setForm({ title: '', amount: '', category: 'food', date: new Date().toISOString().split('T')[0] });
     } catch (error) {
       console.error('Error saving expense:', error);
-      console.error('Error details:', error.response?.data || error.message);
-      // If error occurs, refresh from server to ensure consistency
-      fetchExpenses();
     } finally {
       setLoading(false);
     }
@@ -103,19 +109,12 @@ export default function App() {
     setEditingExpense(expense);
   };
 
-  const deleteExpense = async (id) => {
+  const deleteExpense = (id) => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
       try {
-        await axios.delete(`${API_URL}/expenses/${id}`);
-        await fetchExpenses();
-        const hasActiveFilters = filters.category || filters.startDate || filters.endDate;
-        if (hasActiveFilters) {
-          await fetchExpensesWithFilters(filters);
-        }
+        setExpenses(prevExpenses => prevExpenses.filter(expense => expense.id !== id));
       } catch (error) {
         console.error('Error deleting expense:', error);
-        // If error occurs, refresh from server to ensure consistency
-        fetchExpenses();
       }
     }
   };
@@ -125,9 +124,7 @@ export default function App() {
     setForm({ title: '', amount: '', category: 'food', date: new Date().toISOString().split('T')[0] });
   };
 
-  useEffect(() => { 
-    fetchExpenses(); 
-  }, []);
+  // Remove the fetchExpenses call since we're using localStorage
 
   // The list to render comes from the server based on applied filters
   const filteredExpenses = displayExpenses;
@@ -333,7 +330,11 @@ export default function App() {
                     <button
                       type="button"
                       className="btn"
-                      onClick={async () => { setFilters({ ...pendingFilters }); await fetchExpensesWithFilters(pendingFilters); }}
+                      onClick={() => { 
+                        setFilters({ ...pendingFilters }); 
+                        const filtered = filterExpenses(expenses, pendingFilters);
+                        setDisplayExpenses(filtered);
+                      }}
                     >
                       Search
                     </button>
@@ -341,7 +342,11 @@ export default function App() {
                       type="button"
                       className="btn btn-secondary"
                       style={{ marginLeft: '8px' }}
-                      onClick={async () => { setPendingFilters({ category: '', startDate: '', endDate: '' }); setFilters({ category: '', startDate: '', endDate: '' }); await fetchExpenses(); }}
+                      onClick={() => { 
+                        setPendingFilters({ category: '', startDate: '', endDate: '' }); 
+                        setFilters({ category: '', startDate: '', endDate: '' }); 
+                        setDisplayExpenses(expenses);
+                      }}
                     >
                       Reset
                     </button>
