@@ -31,10 +31,40 @@ app.get('/', (req, res) => {
   res.send('✅ Expense Tracker Backend is running!');
 });
 
+// Health check: verifies DB connectivity and returns basic stats
+app.get('/health', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM expenses');
+    res.json({ status: 'ok', db: 'connected', expensesCount: rows[0].count });
+  } catch (err) {
+    console.error('❌ Health check failed:', err);
+    res.status(500).json({ status: 'error', db: 'disconnected' });
+  }
+});
+
 // Get all expenses
 app.get('/expenses', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM expenses ORDER BY date DESC');
+    // Optional query filters: category, startDate, endDate (YYYY-MM-DD)
+    const { category, startDate, endDate } = req.query;
+    const where = [];
+    const params = [];
+
+    if (category) {
+      params.push(category);
+      where.push(`category = $${params.length}`);
+    }
+    if (startDate) {
+      params.push(startDate);
+      where.push(`date >= $${params.length}`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      where.push(`date <= $${params.length}`);
+    }
+
+    const sql = `SELECT * FROM expenses ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY date DESC, id DESC`;
+    const result = await pool.query(sql, params);
     res.json(result.rows);
   } catch (err) {
     console.error('❌ Error fetching expenses:', err);
