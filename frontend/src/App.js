@@ -113,11 +113,12 @@ export default function App() {
     fetchExpenses(); 
   }, []);
 
-  // Filter expenses based on filters
+  // Filter expenses based on filters (normalize to local day to avoid timezone issues)
   const filteredExpenses = expenses.filter(expense => {
     const matchesCategory = !filters.category || expense.category === filters.category;
-    const matchesStartDate = !filters.startDate || new Date(expense.date) >= new Date(filters.startDate);
-    const matchesEndDate = !filters.endDate || new Date(expense.date) <= new Date(filters.endDate);
+    const expenseDate = toLocalDayStart(expense.date);
+    const matchesStartDate = !filters.startDate || expenseDate >= toLocalDayStart(filters.startDate);
+    const matchesEndDate = !filters.endDate || expenseDate <= toLocalDayEnd(filters.endDate);
     return matchesCategory && matchesStartDate && matchesEndDate;
   });
 
@@ -127,8 +128,9 @@ export default function App() {
     console.log('Expenses:', expenses);
     const currentFiltered = expenses.filter(expense => {
       const matchesCategory = !filters.category || expense.category === filters.category;
-      const matchesStartDate = !filters.startDate || new Date(expense.date) >= new Date(filters.startDate);
-      const matchesEndDate = !filters.endDate || new Date(expense.date) <= new Date(filters.endDate);
+      const expenseDate = toLocalDayStart(expense.date);
+      const matchesStartDate = !filters.startDate || expenseDate >= toLocalDayStart(filters.startDate);
+      const matchesEndDate = !filters.endDate || expenseDate <= toLocalDayEnd(filters.endDate);
       return matchesCategory && matchesStartDate && matchesEndDate;
     });
     console.log('Filtered expenses:', currentFiltered.length, 'items');
@@ -169,6 +171,10 @@ export default function App() {
   const getCategoryLabel = (categoryValue) => {
     return CATEGORIES.find(cat => cat.value === categoryValue)?.label || categoryValue;
   };
+
+  // Helpers to normalize date-only strings to local day boundaries
+  const toLocalDayStart = (dateString) => new Date(`${dateString}T00:00:00`);
+  const toLocalDayEnd = (dateString) => new Date(`${dateString}T23:59:59`);
 
   return (
     <div className="app">
