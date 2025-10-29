@@ -19,6 +19,8 @@ export default function App() {
   const [form, setForm] = useState({ title: '', amount: '', category: 'food', date: new Date().toISOString().split('T')[0] });
   const [editingExpense, setEditingExpense] = useState(null);
   const [filters, setFilters] = useState({ category: '', startDate: '', endDate: '' });
+  // Pending filters allow users to adjust inputs and apply them using the Search button
+  const [pendingFilters, setPendingFilters] = useState({ category: '', startDate: '', endDate: '' });
   const [loading, setLoading] = useState(false);
 
   const fetchExpenses = async () => {
@@ -270,8 +272,8 @@ export default function App() {
                 <div className="filter-group">
                   <label>Category</label>
                   <select
-                    value={filters.category}
-                    onChange={e => setFilters({ ...filters, category: e.target.value })}
+                    value={pendingFilters.category}
+                    onChange={e => setPendingFilters({ ...pendingFilters, category: e.target.value })}
                   >
                     <option value="">All Categories</option>
                     {CATEGORIES.map(cat => (
@@ -285,17 +287,37 @@ export default function App() {
                   <label>From</label>
                   <input
                     type="date"
-                    value={filters.startDate}
-                    onChange={e => setFilters({ ...filters, startDate: e.target.value })}
+                    value={pendingFilters.startDate}
+                    onChange={e => setPendingFilters({ ...pendingFilters, startDate: e.target.value })}
                   />
                 </div>
                 <div className="filter-group">
                   <label>To</label>
                   <input
                     type="date"
-                    value={filters.endDate}
-                    onChange={e => setFilters({ ...filters, endDate: e.target.value })}
+                    value={pendingFilters.endDate}
+                    onChange={e => setPendingFilters({ ...pendingFilters, endDate: e.target.value })}
                   />
+                </div>
+                <div className="filter-group">
+                  <label style={{ visibility: 'hidden' }}>Search</label>
+                  <div>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setFilters({ ...pendingFilters })}
+                    >
+                      Search
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ marginLeft: '8px' }}
+                      onClick={() => { setPendingFilters({ category: '', startDate: '', endDate: '' }); setFilters({ category: '', startDate: '', endDate: '' }); }}
+                    >
+                      Reset
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

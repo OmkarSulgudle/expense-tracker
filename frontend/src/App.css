@@ -194,6 +194,8 @@
   display: flex;
   gap: 15px;
   align-items: center;
+  flex-wrap: wrap; /* allow controls to wrap instead of overflowing */
+  justify-content: flex-start;
 }
 
 .filter-group {
@@ -213,6 +215,12 @@
   border: 1px solid #ddd;
   border-radius: 6px;
   font-size: 0.9rem;
+}
+
+/* Buttons inside filters should not stretch full width */
+.filters .btn {
+  width: auto;
+  padding: 10px 16px;
 }
 
 .expense-list {
