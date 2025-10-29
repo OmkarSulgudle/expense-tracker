@@ -116,9 +116,11 @@ export default function App() {
   // Filter expenses based on filters (normalize to local day to avoid timezone issues)
   const filteredExpenses = expenses.filter(expense => {
     const matchesCategory = !filters.category || expense.category === filters.category;
-    const expenseDate = toLocalDayStart(expense.date);
-    const matchesStartDate = !filters.startDate || expenseDate >= toLocalDayStart(filters.startDate);
-    const matchesEndDate = !filters.endDate || expenseDate <= toLocalDayEnd(filters.endDate);
+    const expenseDate = toLocalMidnight(expense.date);
+    const start = parseDateInputToStart(filters.startDate);
+    const end = parseDateInputToEnd(filters.endDate);
+    const matchesStartDate = !start || expenseDate >= start;
+    const matchesEndDate = !end || expenseDate <= end;
     return matchesCategory && matchesStartDate && matchesEndDate;
   });
 
@@ -128,9 +130,11 @@ export default function App() {
     console.log('Expenses:', expenses);
     const currentFiltered = expenses.filter(expense => {
       const matchesCategory = !filters.category || expense.category === filters.category;
-      const expenseDate = toLocalDayStart(expense.date);
-      const matchesStartDate = !filters.startDate || expenseDate >= toLocalDayStart(filters.startDate);
-      const matchesEndDate = !filters.endDate || expenseDate <= toLocalDayEnd(filters.endDate);
+      const expenseDate = toLocalMidnight(expense.date);
+      const start = parseDateInputToStart(filters.startDate);
+      const end = parseDateInputToEnd(filters.endDate);
+      const matchesStartDate = !start || expenseDate >= start;
+      const matchesEndDate = !end || expenseDate <= end;
       return matchesCategory && matchesStartDate && matchesEndDate;
     });
     console.log('Filtered expenses:', currentFiltered.length, 'items');
@@ -172,9 +176,28 @@ export default function App() {
     return CATEGORIES.find(cat => cat.value === categoryValue)?.label || categoryValue;
   };
 
-  // Helpers to normalize date-only strings to local day boundaries
-  const toLocalDayStart = (dateString) => new Date(`${dateString}T00:00:00`);
-  const toLocalDayEnd = (dateString) => new Date(`${dateString}T23:59:59`);
+  // Helpers to normalize dates for reliable local-day comparisons
+  const toLocalMidnight = (dateLike) => {
+    const d = new Date(dateLike);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  };
+  const parseDateInputToStart = (value) => {
+    if (!value) return null;
+    const parts = String(value).split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0, 0);
+    }
+    return toLocalMidnight(value);
+  };
+  const parseDateInputToEnd = (value) => {
+    if (!value) return null;
+    const parts = String(value).split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59, 999);
+    }
+    const d = toLocalMidnight(value);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  };
 
   return (
     <div className="app">
